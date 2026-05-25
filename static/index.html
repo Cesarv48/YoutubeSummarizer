@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>YouTube Summarizer</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a26;
+    --border: #2a2a3a;
+    --accent: #ff3c5f;
+    --accent2: #7c3aed;
+    --accent3: #06b6d4;
+    --text: #f0f0fa;
+    --muted: #6b6b85;
+    --success: #10b981;
+    --mono: 'DM Mono', monospace;
+    --sans: 'Syne', sans-serif;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grain overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 999;
+    opacity: 0.6;
+  }
+
+  /* Ambient glow */
+  .ambient {
+    position: fixed;
+    top: -30vh;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80vw;
+    height: 60vh;
+    background: radial-gradient(ellipse, rgba(124,58,237,0.12) 0%, rgba(255,60,95,0.06) 50%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  header {
+    padding: 52px 0 40px;
+    text-align: center;
+    animation: fadeDown 0.7s ease both;
+  }
+
+  .logo-tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    text-transform: uppercase;
+    border: 1px solid rgba(255,60,95,0.3);
+    padding: 4px 12px;
+    border-radius: 2px;
+    margin-bottom: 20px;
+  }
+
+  h1 {
+    font-size: clamp(48px, 8vw, 80px);
+    font-weight: 800;
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+    margin-bottom: 14px;
+  }
+
+  h1 .tl { color: var(--accent); }
+  h1 .dw { color: var(--text); }
+  h1 .sep {
+    color: var(--accent2);
+    display: inline-block;
+    margin: 0 6px;
+  }
+
+  .tagline {
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  /* Input section */
+  .input-section {
+    margin: 44px 0 0;
+    animation: fadeUp 0.7s 0.15s ease both;
+  }
+
+  .url-form {
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--surface);
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .url-form:focus-within {
+    border-color: rgba(255,60,95,0.5);
+    box-shadow: 0 0 0 3px rgba(255,60,95,0.08), 0 0 32px rgba(255,60,95,0.06);
+  }
+
+  .url-icon {
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    color: var(--muted);
+    background: var(--surface2);
+    border-right: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .url-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    padding: 18px 16px;
+    letter-spacing: 0.02em;
+  }
+
+  .url-input::placeholder { color: var(--muted); }
+
+  .submit-btn {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 0 28px;
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .submit-btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(rgba(255,255,255,0.1), transparent);
+    pointer-events: none;
+  }
+
+  .submit-btn:hover { background: #e0284f; }
+  .submit-btn:active { transform: scale(0.98); }
+  .submit-btn:disabled { background: var(--border); cursor: not-allowed; }
+
+  .hint {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 10px;
+    text-align: center;
+    letter-spacing: 0.05em;
+  }
+
+  /* Loading */
+  .loader {
+    display: none;
+    text-align: center;
+    padding: 64px 0;
+    animation: fadeIn 0.3s ease;
+  }
+
+  .loader.active { display: block; }
+
+  .loader-ring {
+    width: 48px;
+    height: 48px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 20px;
+  }
+
+  .loader-text {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+  }
+
+  .loader-steps {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .loader-step {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--border);
+    transition: color 0.4s;
+    letter-spacing: 0.05em;
+  }
+
+  .loader-step.active { color: var(--accent3); }
+  .loader-step.done { color: var(--success); }
+
+  /* Error */
+  .error-box {
+    display: none;
+    background: rgba(255,60,95,0.08);
+    border: 1px solid rgba(255,60,95,0.3);
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin-top: 20px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+    animation: fadeIn 0.3s ease;
+  }
+
+  .error-box.active { display: block; }
+
+  /* Results */
+  .results {
+    display: none;
+    margin-top: 44px;
+    animation: fadeUp 0.5s ease both;
+  }
+
+  .results.active { display: block; }
+
+  /* Video card */
+  .video-card {
+    display: flex;
+    gap: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 28px;
+    align-items: center;
+  }
+
+  .video-thumb {
+    width: 160px;
+    height: 90px;
+    border-radius: 4px;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+  }
+
+  .video-meta { flex: 1; min-width: 0; }
+
+  .video-title-guess {
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 8px;
+    color: var(--text);
+  }
+
+  .video-overview {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .video-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent3);
+    text-decoration: none;
+    letter-spacing: 0.05em;
+    transition: opacity 0.2s;
+  }
+
+  .video-link:hover { opacity: 0.7; }
+
+  /* Topics */
+  .topics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 28px;
+  }
+
+  .topic-tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 5px 12px;
+    border-radius: 2px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    background: var(--surface);
+  }
+
+  .topic-tag:nth-child(1) { border-color: rgba(255,60,95,0.4); color: var(--accent); }
+  .topic-tag:nth-child(2) { border-color: rgba(124,58,237,0.4); color: #a78bfa; }
+  .topic-tag:nth-child(3) { border-color: rgba(6,182,212,0.4); color: var(--accent3); }
+
+  /* Section label */
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* Key points */
+  .key-points { display: flex; flex-direction: column; gap: 0; }
+
+  .key-point {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-bottom: none;
+    background: var(--surface);
+    transition: background 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .key-point::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: transparent;
+    transition: background 0.2s;
+  }
+
+  .key-point:hover { background: var(--surface2); }
+  .key-point:hover::before { background: var(--accent); }
+
+  .key-point:first-child { border-radius: 6px 6px 0 0; }
+  .key-point:last-child { border-bottom: 1px solid var(--border); border-radius: 0 0 6px 6px; }
+
+  .point-ts {
+    padding: 20px 16px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+  }
+
+  .ts-badge {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--accent);
+    background: rgba(255,60,95,0.1);
+    border: 1px solid rgba(255,60,95,0.2);
+    padding: 4px 8px;
+    border-radius: 2px;
+    white-space: nowrap;
+    letter-spacing: 0.05em;
+  }
+
+  .point-content { padding: 20px 20px 20px 20px; }
+
+  .point-title {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    color: var(--text);
+    letter-spacing: -0.01em;
+  }
+
+  .point-summary {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.65;
+  }
+
+  /* Duration note */
+  .duration-note {
+    margin-top: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  .duration-note svg { color: var(--accent3); flex-shrink: 0; }
+
+  /* Reset btn */
+  .reset-btn {
+    display: block;
+    margin: 36px auto 0;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 12px 24px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .reset-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Animations */
+  @keyframes fadeDown { from { opacity: 0; transform: translateY(-16px); } to { opacity: 1; transform: none; } }
+  @keyframes fadeUp   { from { opacity: 0; transform: translateY(16px);  } to { opacity: 1; transform: none; } }
+  @keyframes fadeIn   { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes spin     { to { transform: rotate(360deg); } }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    padding: 48px 0 32px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--border);
+    letter-spacing: 0.08em;
+    position: relative;
+    z-index: 1;
+  }
+
+  @media (max-width: 600px) {
+    .url-form { flex-direction: column; }
+    .submit-btn { padding: 16px; }
+    .video-card { flex-direction: column; }
+    .video-thumb { width: 100%; height: auto; }
+    h1 { font-size: 48px; }
+  }
+</style>
+</head>
+<body>
+<div class="ambient"></div>
+
+<div class="container">
+  <header>
+    <div class="logo-tag">Powered by ChatGPT</div>
+    <h1>
+      <span class="tl">YT</span><span class="sep">-</span><span class="dw">GPT</span>
+    </h1>
+    <p class="tagline">Paste Youtube URL - Get the rundown.</p>
+  </header>
+
+  <section class="input-section">
+    <div class="url-form" id="urlForm">
+      <div class="url-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58A2.78 2.78 0 0 0 3.41 19.6C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.96A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/>
+          <polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="currentColor" stroke="none"/>
+        </svg>
+      </div>
+      <input
+        class="url-input"
+        id="urlInput"
+        type="text"
+        placeholder="https://www.youtube.com/watch?v=..."
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button class="submit-btn" id="submitBtn" onclick="summarize()">SUMMARIZE</button>
+    </div>
+    <p class="hint">supports youtube.com links</p>
+  </section>
+
+  <!-- Error -->
+  <div class="error-box" id="errorBox"></div>
+
+  <!-- Loader -->
+  <div class="loader" id="loader">
+    <div class="loader-ring"></div>
+    <div class="loader-text">PROCESSING VIDEO</div>
+    <div class="loader-steps">
+      <div class="loader-step" id="step1">→ fetching transcript...</div>
+      <div class="loader-step" id="step2">→ sending to ChatGPT...</div>
+      <div class="loader-step" id="step3">→ structuring key points...</div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="results" id="results">
+    <!-- Video Card -->
+    <div class="video-card">
+      <img class="video-thumb" id="videoThumb" src="" alt="Video thumbnail"/>
+      <div class="video-meta">
+        <div class="video-title-guess" id="videoTitle"></div>
+        <div class="video-overview" id="videoOverview"></div>
+        <a class="video-link" id="videoLink" href="#" target="_blank">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58A2.78 2.78 0 0 0 3.41 19.6C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.96A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="white"/></svg>
+          Watch on YouTube
+        </a>
+      </div>
+    </div>
+
+    <!-- Topics -->
+    <div class="topics" id="topicsList"></div>
+
+    <!-- Key Points -->
+    <div class="section-label">Key Points with Timestamps</div>
+    <div class="key-points" id="keyPoints"></div>
+
+    <!-- Duration note -->
+    <div class="duration-note" id="durationNote">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span id="durationText"></span>
+    </div>
+
+    <button class="reset-btn" onclick="reset()">↩ summarize another video</button>
+  </div>
+</div>
+
+<footer>YouTube Summarizer - CV</footer>
+
+<script>
+  const urlInput = document.getElementById('urlInput');
+  const submitBtn = document.getElementById('submitBtn');
+  const loader = document.getElementById('loader');
+  const errorBox = document.getElementById('errorBox');
+  const results = document.getElementById('results');
+
+  urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') summarize(); });
+
+  function showError(msg) {
+    errorBox.textContent = '⚠ ' + msg;
+    errorBox.classList.add('active');
+  }
+
+  function hideError() { errorBox.classList.remove('active'); }
+
+  function setStep(n) {
+    for (let i = 1; i <= 3; i++) {
+      const el = document.getElementById('step' + i);
+      el.className = 'loader-step' + (i < n ? ' done' : i === n ? ' active' : '');
+    }
+  }
+
+  async function summarize() {
+    const url = urlInput.value.trim();
+    if (!url) { showError('Please paste a YouTube URL.'); return; }
+
+    hideError();
+    results.classList.remove('active');
+    loader.classList.add('active');
+    submitBtn.disabled = true;
+    setStep(1);
+
+    setTimeout(() => setStep(2), 1200);
+    setTimeout(() => setStep(3), 2800);
+
+    try {
+      const res = await fetch('/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.detail || 'Something went wrong.');
+      }
+
+      renderResults(data);
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      loader.classList.remove('active');
+      submitBtn.disabled = false;
+      setStep(0);
+    }
+  }
+
+  function renderResults(data) {
+    const s = data.summary;
+
+    document.getElementById('videoThumb').src = data.thumbnail;
+    document.getElementById('videoTitle').textContent = s.title_guess || 'Video Summary';
+    document.getElementById('videoOverview').textContent = s.overview || '';
+    const link = document.getElementById('videoLink');
+    link.href = data.video_url;
+
+    // Topics
+    const topicsList = document.getElementById('topicsList');
+    topicsList.innerHTML = '';
+    (s.topics || []).forEach(t => {
+      const tag = document.createElement('span');
+      tag.className = 'topic-tag';
+      tag.textContent = t;
+      topicsList.appendChild(tag);
+    });
+
+    // Key points
+    const keyPoints = document.getElementById('keyPoints');
+    keyPoints.innerHTML = '';
+    (s.key_points || []).forEach(kp => {
+      const div = document.createElement('div');
+      div.className = 'key-point';
+      div.innerHTML = `
+        <div class="point-ts"><span class="ts-badge">${kp.timestamp}</span></div>
+        <div class="point-content">
+          <div class="point-title">${escHtml(kp.title)}</div>
+          <div class="point-summary">${escHtml(kp.summary)}</div>
+        </div>
+      `;
+      keyPoints.appendChild(div);
+    });
+
+    // Duration
+    document.getElementById('durationText').textContent = s.duration_note || '';
+
+    results.classList.add('active');
+    results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function reset() {
+    results.classList.remove('active');
+    urlInput.value = '';
+    urlInput.focus();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function escHtml(str) {
+    return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
+</body>
+</html>
